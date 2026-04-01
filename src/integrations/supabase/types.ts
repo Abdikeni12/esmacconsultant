@@ -47,6 +47,51 @@ export type Database = {
         }
         Relationships: []
       }
+      transactions: {
+        Row: {
+          card_type: string
+          created_at: string
+          created_by: string
+          customer_name: string
+          customer_phone: string | null
+          id: string
+          notes: string | null
+          quantity: number
+          status: string
+          total_price: number
+          unit_price: number
+          updated_at: string
+        }
+        Insert: {
+          card_type?: string
+          created_at?: string
+          created_by: string
+          customer_name: string
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          quantity?: number
+          status?: string
+          total_price?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Update: {
+          card_type?: string
+          created_at?: string
+          created_by?: string
+          customer_name?: string
+          customer_phone?: string | null
+          id?: string
+          notes?: string | null
+          quantity?: number
+          status?: string
+          total_price?: number
+          unit_price?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
