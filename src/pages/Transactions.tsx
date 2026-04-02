@@ -232,7 +232,7 @@ const Transactions = () => {
               </div>
               <div className="p-3 rounded-md bg-muted text-sm">
                 <span className="text-muted-foreground">Total: </span>
-                <span className="font-semibold text-foreground">${(form.quantity * form.unit_price).toFixed(2)}</span>
+                <span className="font-semibold text-foreground">{formatETB(form.quantity * form.unit_price)}</span>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
