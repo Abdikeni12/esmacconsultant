@@ -312,8 +312,8 @@ const Transactions = () => {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-muted-foreground">{tx.card_type}</TableCell>
                       <TableCell className="text-right">{tx.quantity}</TableCell>
-                      <TableCell className="text-right hidden sm:table-cell">${Number(tx.unit_price).toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium">${Number(tx.total_price).toFixed(2)}</TableCell>
+                      <TableCell className="text-right hidden sm:table-cell">{formatETB(Number(tx.unit_price))}</TableCell>
+                      <TableCell className="text-right font-medium">{formatETB(Number(tx.total_price))}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-xs ${statusColors[tx.status] || ''}`}>
                           {tx.status.replace('_', ' ')}
