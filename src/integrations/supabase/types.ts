@@ -14,6 +14,86 @@ export type Database = {
   }
   public: {
     Tables: {
+      inventory_adjustments: {
+        Row: {
+          adjusted_by: string
+          adjustment_type: string
+          created_at: string
+          id: string
+          inventory_item_id: string
+          quantity_change: number
+          reason: string | null
+        }
+        Insert: {
+          adjusted_by: string
+          adjustment_type: string
+          created_at?: string
+          id?: string
+          inventory_item_id: string
+          quantity_change: number
+          reason?: string | null
+        }
+        Update: {
+          adjusted_by?: string
+          adjustment_type?: string
+          created_at?: string
+          id?: string
+          inventory_item_id?: string
+          quantity_change?: number
+          reason?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "inventory_adjustments_inventory_item_id_fkey"
+            columns: ["inventory_item_id"]
+            isOneToOne: false
+            referencedRelation: "inventory_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      inventory_items: {
+        Row: {
+          category: string
+          cost_per_unit: number
+          created_at: string
+          damaged_quantity: number
+          id: string
+          min_stock_level: number
+          name: string
+          notes: string | null
+          quantity: number
+          unit: string
+          updated_at: string
+        }
+        Insert: {
+          category?: string
+          cost_per_unit?: number
+          created_at?: string
+          damaged_quantity?: number
+          id?: string
+          min_stock_level?: number
+          name: string
+          notes?: string | null
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Update: {
+          category?: string
+          cost_per_unit?: number
+          created_at?: string
+          damaged_quantity?: number
+          id?: string
+          min_stock_level?: number
+          name?: string
+          notes?: string | null
+          quantity?: number
+          unit?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string
