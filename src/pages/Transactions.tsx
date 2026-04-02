@@ -226,7 +226,7 @@ const Transactions = () => {
                   <Input type="number" min={1} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Unit Price ($) *</Label>
+                  <Label>Unit Price (ETB) *</Label>
                   <Input type="number" min={0} step={0.01} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
