@@ -270,7 +270,7 @@ const Transactions = () => {
         <div className="flex items-center gap-2 ml-auto text-sm text-muted-foreground">
           <span>{filtered.length} transactions</span>
           <span>•</span>
-          <span className="font-semibold text-foreground">${totalRevenue.toFixed(2)} total</span>
+          <span className="font-semibold text-foreground">{formatETB(totalRevenue)} total</span>
         </div>
       </div>
 
