@@ -1,4 +1,5 @@
 import { CreditCard, DollarSign, TrendingDown, TrendingUp, Printer } from 'lucide-react';
+import { formatETB } from '@/lib/currency';
 import { KpiCard } from '@/components/KpiCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
