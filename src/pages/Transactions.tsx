@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, CreditCard, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatETB } from '@/lib/currency';
 
 const CARD_TYPES = ['Standard ID', 'Student ID', 'Employee ID', 'Government ID', 'Membership Card', 'Access Card', 'Other'];
 const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
@@ -225,13 +226,13 @@ const Transactions = () => {
                   <Input type="number" min={1} value={form.quantity} onChange={e => setForm(f => ({ ...f, quantity: parseInt(e.target.value) || 1 }))} />
                 </div>
                 <div className="space-y-2">
-                  <Label>Unit Price ($) *</Label>
+                  <Label>Unit Price (ETB) *</Label>
                   <Input type="number" min={0} step={0.01} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
               <div className="p-3 rounded-md bg-muted text-sm">
                 <span className="text-muted-foreground">Total: </span>
-                <span className="font-semibold text-foreground">${(form.quantity * form.unit_price).toFixed(2)}</span>
+                <span className="font-semibold text-foreground">{formatETB(form.quantity * form.unit_price)}</span>
               </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
@@ -269,7 +270,7 @@ const Transactions = () => {
         <div className="flex items-center gap-2 ml-auto text-sm text-muted-foreground">
           <span>{filtered.length} transactions</span>
           <span>•</span>
-          <span className="font-semibold text-foreground">${totalRevenue.toFixed(2)} total</span>
+          <span className="font-semibold text-foreground">{formatETB(totalRevenue)} total</span>
         </div>
       </div>
 
@@ -311,8 +312,8 @@ const Transactions = () => {
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-muted-foreground">{tx.card_type}</TableCell>
                       <TableCell className="text-right">{tx.quantity}</TableCell>
-                      <TableCell className="text-right hidden sm:table-cell">${Number(tx.unit_price).toFixed(2)}</TableCell>
-                      <TableCell className="text-right font-medium">${Number(tx.total_price).toFixed(2)}</TableCell>
+                      <TableCell className="text-right hidden sm:table-cell">{formatETB(Number(tx.unit_price))}</TableCell>
+                      <TableCell className="text-right font-medium">{formatETB(Number(tx.total_price))}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-xs ${statusColors[tx.status] || ''}`}>
                           {tx.status.replace('_', ' ')}

@@ -1,0 +1,2 @@
+ALTER TABLE public.inventory_items DROP CONSTRAINT inventory_items_category_check;
+ALTER TABLE public.inventory_items ADD CONSTRAINT inventory_items_category_check CHECK (category = ANY (ARRAY['cards', 'ink', 'consumables', 'other', 'paper_a4', 'paper_glossy']));

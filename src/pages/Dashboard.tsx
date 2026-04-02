@@ -1,4 +1,5 @@
 import { CreditCard, DollarSign, TrendingDown, TrendingUp, Printer } from 'lucide-react';
+import { formatETB } from '@/lib/currency';
 import { KpiCard } from '@/components/KpiCard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line } from 'recharts';
@@ -27,9 +28,9 @@ const Dashboard = () => {
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <KpiCard title="Cards Printed" value="194" subtitle="This week" icon={Printer} color="primary" />
-        <KpiCard title="Revenue" value="$8,420" subtitle="This week" icon={DollarSign} color="success" />
-        <KpiCard title="Expenses" value="$2,150" subtitle="This week" icon={TrendingDown} color="destructive" />
-        <KpiCard title="Profit" value="$6,270" subtitle="This week" icon={TrendingUp} color="info" />
+        <KpiCard title="Revenue" value={formatETB(8420)} subtitle="This week" icon={DollarSign} color="success" />
+        <KpiCard title="Expenses" value={formatETB(2150)} subtitle="This week" icon={TrendingDown} color="destructive" />
+        <KpiCard title="Profit" value={formatETB(6270)} subtitle="This week" icon={TrendingUp} color="info" />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
