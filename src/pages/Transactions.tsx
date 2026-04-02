@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, CreditCard, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
+import { formatETB } from '@/lib/currency';
 
 const CARD_TYPES = ['Standard ID', 'Student ID', 'Employee ID', 'Government ID', 'Membership Card', 'Access Card', 'Other'];
 const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
