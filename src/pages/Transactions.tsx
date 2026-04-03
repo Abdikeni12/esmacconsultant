@@ -5,39 +5,45 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Search, Filter, Receipt } from 'lucide-react';
+import { Plus, Pencil, Trash2, CreditCard, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatETB } from '@/lib/currency';
 
-const PAYMENT_METHODS = ['Cash', 'Telebirr', 'CBE Birr', 'Ebirr Kaafi', 'Ebirr Coopay'];
-const STATUSES = ['paid', 'pending'] as const;
+const CARD_TYPES = ['Standard ID', 'Student ID', 'Employee ID', 'Government ID', 'Membership Card', 'Access Card', 'Other'];
+const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
 
 const statusColors: Record<string, string> = {
-  paid: 'bg-success/15 text-success border-success/30',
   pending: 'bg-warning/15 text-warning border-warning/30',
+  in_progress: 'bg-info/15 text-info border-info/30',
+  completed: 'bg-success/15 text-success border-success/30',
+  cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
 };
 
 interface TransactionForm {
   customer_name: string;
   customer_phone: string;
-  service_id: string;
+  card_type: string;
   quantity: number;
   unit_price: number;
-  payment_method: string;
   notes: string;
   status: string;
 }
 
 const emptyForm: TransactionForm = {
-  customer_name: '', customer_phone: '', service_id: '', quantity: 1,
-  unit_price: 0, payment_method: 'Cash', notes: '', status: 'pending',
+  customer_name: '',
+  customer_phone: '',
+  card_type: 'Standard ID',
+  quantity: 1,
+  unit_price: 0,
+  notes: '',
+  status: 'pending',
 };
 
 const Transactions = () => {
@@ -49,21 +55,12 @@ const Transactions = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
-  const { data: services = [] } = useQuery({
-    queryKey: ['services'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('services').select('*').eq('is_active', true).order('service_name');
-      if (error) throw error;
-      return data;
-    },
-  });
-
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('transactions')
-        .select('*, services(service_name, category, affects_inventory)')
+        .select('*')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -71,64 +68,21 @@ const Transactions = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (f: TransactionForm) => {
-      const service = services.find(s => s.id === f.service_id);
-
-      // Create or find customer
-      let customerId: string | null = null;
-      if (f.customer_name.trim()) {
-        const { data: existing } = await supabase.from('customers')
-          .select('id').eq('full_name', f.customer_name.trim()).limit(1).maybeSingle();
-        if (existing) {
-          customerId = existing.id;
-        } else {
-          const { data: newCust, error: custErr } = await supabase.from('customers')
-            .insert({ full_name: f.customer_name.trim(), phone: f.customer_phone.trim() || null })
-            .select('id').single();
-          if (custErr) throw custErr;
-          customerId = newCust.id;
-        }
-      }
-
+    mutationFn: async (form: TransactionForm) => {
       const { error } = await supabase.from('transactions').insert({
-        customer_name: f.customer_name.trim(),
-        customer_phone: f.customer_phone.trim() || null,
-        service_id: f.service_id || null,
-        card_type: service?.service_name || 'Other',
-        quantity: f.quantity,
-        unit_price: f.unit_price,
-        payment_method: f.payment_method,
-        notes: f.notes.trim() || null,
-        status: f.status,
+        customer_name: form.customer_name.trim(),
+        customer_phone: form.customer_phone.trim() || null,
+        card_type: form.card_type,
+        quantity: form.quantity,
+        unit_price: form.unit_price,
+        notes: form.notes.trim() || null,
+        status: form.status,
         created_by: user!.id,
-        customer_id: customerId,
       });
       if (error) throw error;
-
-      // Deduct inventory if service affects it
-      if (service?.affects_inventory) {
-        const { data: invItems } = await supabase.from('inventory_items')
-          .select('id, quantity').limit(1);
-        if (invItems && invItems.length > 0) {
-          const item = invItems[0];
-          await supabase.from('inventory_items').update({
-            quantity: Math.max(0, item.quantity - f.quantity),
-          }).eq('id', item.id);
-        }
-      }
-
-      // Log audit
-      await supabase.from('audit_logs').insert({
-        user_id: user!.id,
-        action: 'create',
-        entity: 'transaction',
-        details: `Created transaction for ${f.customer_name} - ${service?.service_name || 'N/A'}`,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
-      queryClient.invalidateQueries({ queryKey: ['inventory_items'] });
-      queryClient.invalidateQueries({ queryKey: ['customers'] });
       toast.success('Transaction created');
       resetForm();
     },
@@ -136,28 +90,17 @@ const Transactions = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, f }: { id: string; f: TransactionForm }) => {
-      const service = services.find(s => s.id === f.service_id);
+    mutationFn: async ({ id, form }: { id: string; form: TransactionForm }) => {
       const { error } = await supabase.from('transactions').update({
-        customer_name: f.customer_name.trim(),
-        customer_phone: f.customer_phone.trim() || null,
-        service_id: f.service_id || null,
-        card_type: service?.service_name || 'Other',
-        quantity: f.quantity,
-        unit_price: f.unit_price,
-        payment_method: f.payment_method,
-        notes: f.notes.trim() || null,
-        status: f.status,
+        customer_name: form.customer_name.trim(),
+        customer_phone: form.customer_phone.trim() || null,
+        card_type: form.card_type,
+        quantity: form.quantity,
+        unit_price: form.unit_price,
+        notes: form.notes.trim() || null,
+        status: form.status,
       }).eq('id', id);
       if (error) throw error;
-
-      await supabase.from('audit_logs').insert({
-        user_id: user!.id,
-        action: 'update',
-        entity: 'transaction',
-        entity_id: id,
-        details: `Updated transaction for ${f.customer_name}`,
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -171,10 +114,6 @@ const Transactions = () => {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
-      await supabase.from('audit_logs').insert({
-        user_id: user!.id, action: 'delete', entity: 'transaction', entity_id: id,
-        details: 'Deleted transaction',
-      });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -183,16 +122,19 @@ const Transactions = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const resetForm = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(false); };
+  const resetForm = () => {
+    setForm(emptyForm);
+    setEditingId(null);
+    setDialogOpen(false);
+  };
 
-  const handleEdit = (tx: any) => {
+  const handleEdit = (tx: typeof transactions[0]) => {
     setForm({
       customer_name: tx.customer_name,
       customer_phone: tx.customer_phone || '',
-      service_id: tx.service_id || '',
+      card_type: tx.card_type,
       quantity: tx.quantity,
       unit_price: Number(tx.unit_price),
-      payment_method: tx.payment_method || 'Cash',
       notes: tx.notes || '',
       status: tx.status,
     });
@@ -200,49 +142,52 @@ const Transactions = () => {
     setDialogOpen(true);
   };
 
-  const handleServiceChange = (serviceId: string) => {
-    const service = services.find(s => s.id === serviceId);
-    setForm(f => ({
-      ...f,
-      service_id: serviceId,
-      unit_price: service ? Number(service.default_price) : f.unit_price,
-    }));
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.customer_name.trim()) { toast.error('Customer name is required'); return; }
-    if (!form.service_id) { toast.error('Please select a service'); return; }
-    if (form.unit_price <= 0) { toast.error('Unit price must be greater than 0'); return; }
-    if (editingId) updateMutation.mutate({ id: editingId, f: form });
-    else createMutation.mutate(form);
+    if (!form.customer_name.trim()) {
+      toast.error('Customer name is required');
+      return;
+    }
+    if (form.unit_price <= 0) {
+      toast.error('Unit price must be greater than 0');
+      return;
+    }
+    if (editingId) {
+      updateMutation.mutate({ id: editingId, form });
+    } else {
+      createMutation.mutate(form);
+    }
   };
 
-  const filtered = transactions.filter((tx: any) => {
-    const matchSearch = !search ||
+  const filtered = transactions.filter(tx => {
+    const matchSearch = !search || 
       tx.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      (tx.services?.service_name || '').toLowerCase().includes(search.toLowerCase()) ||
+      tx.card_type.toLowerCase().includes(search.toLowerCase()) ||
       (tx.customer_phone && tx.customer_phone.includes(search));
     const matchStatus = statusFilter === 'all' || tx.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const totalRevenue = filtered.reduce((sum: number, tx: any) => sum + Number(tx.total_price), 0);
+  const totalRevenue = filtered.reduce((sum, tx) => tx.status !== 'cancelled' ? sum + Number(tx.total_price) : sum, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-heading text-foreground">Transactions</h1>
-          <p className="text-sm text-muted-foreground">Record service transactions and payments</p>
+          <p className="text-sm text-muted-foreground">Manage print jobs and transaction records</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
           <DialogTrigger asChild>
-            <Button className="gradient-primary"><Plus className="h-4 w-4 mr-2" /> New Transaction</Button>
+            <Button className="gradient-primary">
+              <Plus className="h-4 w-4 mr-2" /> New Transaction
+            </Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-heading">{editingId ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
+              <DialogTitle className="font-heading">
+                {editingId ? 'Edit Transaction' : 'New Transaction'}
+              </DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -255,18 +200,25 @@ const Transactions = () => {
                   <Input value={form.customer_phone} onChange={e => setForm(f => ({ ...f, customer_phone: e.target.value }))} placeholder="Phone number" />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label>Service *</Label>
-                <Select value={form.service_id} onValueChange={handleServiceChange}>
-                  <SelectTrigger><SelectValue placeholder="Select a service" /></SelectTrigger>
-                  <SelectContent>
-                    {services.map(s => (
-                      <SelectItem key={s.id} value={s.id}>
-                        {s.service_name} — {formatETB(Number(s.default_price))}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Card Type *</Label>
+                  <Select value={form.card_type} onValueChange={v => setForm(f => ({ ...f, card_type: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {CARD_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -282,32 +234,14 @@ const Transactions = () => {
                 <span className="text-muted-foreground">Total: </span>
                 <span className="font-semibold text-foreground">{formatETB(form.quantity * form.unit_price)}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Payment Method</Label>
-                  <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
               <div className="space-y-2">
                 <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." rows={2} />
+                <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." rows={3} />
               </div>
               <DialogFooter className="gap-2">
-                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
+                <DialogClose asChild>
+                  <Button type="button" variant="outline">Cancel</Button>
+                </DialogClose>
                 <Button type="submit" className="gradient-primary" disabled={createMutation.isPending || updateMutation.isPending}>
                   {editingId ? 'Update' : 'Create'}
                 </Button>
@@ -317,18 +251,20 @@ const Transactions = () => {
         </Dialog>
       </div>
 
+      {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customer, service..." className="pl-9" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customer, card type..." className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-40">
-            <Filter className="h-4 w-4 mr-2" /><SelectValue placeholder="Status" />
+            <Filter className="h-4 w-4 mr-2" />
+            <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s}</SelectItem>)}
+            {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2 ml-auto text-sm text-muted-foreground">
@@ -338,6 +274,7 @@ const Transactions = () => {
         </div>
       </div>
 
+      {/* Table */}
       <Card className="shadow-card">
         <CardContent className="p-0">
           {isLoading ? (
@@ -346,7 +283,7 @@ const Transactions = () => {
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-              <Receipt className="h-8 w-8 mb-2" />
+              <CreditCard className="h-8 w-8 mb-2" />
               <p className="text-sm">No transactions found</p>
             </div>
           ) : (
@@ -355,18 +292,17 @@ const Transactions = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Customer</TableHead>
-                    <TableHead className="hidden sm:table-cell">Service</TableHead>
+                    <TableHead className="hidden sm:table-cell">Card Type</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">Unit Price</TableHead>
                     <TableHead className="text-right">Total</TableHead>
-                    <TableHead className="hidden md:table-cell">Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((tx: any) => (
+                  {filtered.map(tx => (
                     <TableRow key={tx.id}>
                       <TableCell>
                         <div>
@@ -374,16 +310,13 @@ const Transactions = () => {
                           {tx.customer_phone && <p className="text-xs text-muted-foreground">{tx.customer_phone}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground">
-                        {tx.services?.service_name || tx.card_type || '—'}
-                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">{tx.card_type}</TableCell>
                       <TableCell className="text-right">{tx.quantity}</TableCell>
                       <TableCell className="text-right hidden sm:table-cell">{formatETB(Number(tx.unit_price))}</TableCell>
                       <TableCell className="text-right font-medium">{formatETB(Number(tx.total_price))}</TableCell>
-                      <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{tx.payment_method || 'Cash'}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-xs ${statusColors[tx.status] || ''}`}>
-                          {tx.status}
+                          {tx.status.replace('_', ' ')}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-xs">

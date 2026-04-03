@@ -14,66 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      audit_logs: {
-        Row: {
-          action: string
-          created_at: string
-          details: string | null
-          entity: string
-          entity_id: string | null
-          id: string
-          user_id: string | null
-          user_name: string | null
-        }
-        Insert: {
-          action: string
-          created_at?: string
-          details?: string | null
-          entity: string
-          entity_id?: string | null
-          id?: string
-          user_id?: string | null
-          user_name?: string | null
-        }
-        Update: {
-          action?: string
-          created_at?: string
-          details?: string | null
-          entity?: string
-          entity_id?: string | null
-          id?: string
-          user_id?: string | null
-          user_name?: string | null
-        }
-        Relationships: []
-      }
-      customers: {
-        Row: {
-          created_at: string
-          full_name: string
-          id: string
-          notes: string | null
-          phone: string | null
-          updated_at: string
-        }
-        Insert: {
-          created_at?: string
-          full_name: string
-          id?: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
-        Update: {
-          created_at?: string
-          full_name?: string
-          id?: string
-          notes?: string | null
-          phone?: string | null
-          updated_at?: string
-        }
-        Relationships: []
-      }
       inventory_adjustments: {
         Row: {
           adjusted_by: string
@@ -187,107 +127,50 @@ export type Database = {
         }
         Relationships: []
       }
-      services: {
-        Row: {
-          affects_inventory: boolean
-          category: string
-          created_at: string
-          default_price: number
-          id: string
-          is_active: boolean
-          service_name: string
-          updated_at: string
-        }
-        Insert: {
-          affects_inventory?: boolean
-          category?: string
-          created_at?: string
-          default_price?: number
-          id?: string
-          is_active?: boolean
-          service_name: string
-          updated_at?: string
-        }
-        Update: {
-          affects_inventory?: boolean
-          category?: string
-          created_at?: string
-          default_price?: number
-          id?: string
-          is_active?: boolean
-          service_name?: string
-          updated_at?: string
-        }
-        Relationships: []
-      }
       transactions: {
         Row: {
-          card_type: string | null
+          card_type: string
           created_at: string
           created_by: string
-          customer_id: string | null
           customer_name: string
           customer_phone: string | null
           id: string
           notes: string | null
-          payment_method: string
           quantity: number
-          service_id: string | null
           status: string
           total_price: number
           unit_price: number
           updated_at: string
         }
         Insert: {
-          card_type?: string | null
+          card_type?: string
           created_at?: string
           created_by: string
-          customer_id?: string | null
           customer_name: string
           customer_phone?: string | null
           id?: string
           notes?: string | null
-          payment_method?: string
           quantity?: number
-          service_id?: string | null
           status?: string
           total_price?: number
           unit_price?: number
           updated_at?: string
         }
         Update: {
-          card_type?: string | null
+          card_type?: string
           created_at?: string
           created_by?: string
-          customer_id?: string | null
           customer_name?: string
           customer_phone?: string | null
           id?: string
           notes?: string | null
-          payment_method?: string
           quantity?: number
-          service_id?: string | null
           status?: string
           total_price?: number
           unit_price?: number
           updated_at?: string
         }
-        Relationships: [
-          {
-            foreignKeyName: "transactions_customer_id_fkey"
-            columns: ["customer_id"]
-            isOneToOne: false
-            referencedRelation: "customers"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "transactions_service_id_fkey"
-            columns: ["service_id"]
-            isOneToOne: false
-            referencedRelation: "services"
-            referencedColumns: ["id"]
-          },
-        ]
+        Relationships: []
       }
     }
     Views: {
