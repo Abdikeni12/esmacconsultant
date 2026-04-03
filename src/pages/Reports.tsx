@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-import { FileText, Download, TrendingUp, CreditCard, DollarSign } from 'lucide-react';
+import { FileText, Download } from 'lucide-react';
 import { format, startOfDay, startOfWeek, startOfMonth, endOfDay, subDays, subWeeks, subMonths, isWithinInterval } from 'date-fns';
 import { formatETB } from '@/lib/currency';
 
@@ -14,12 +14,12 @@ type Period = 'daily' | 'weekly' | 'monthly';
 
 const Reports = () => {
   const [period, setPeriod] = useState<Period>('daily');
-  const [range, setRange] = useState('7'); // number of periods to show
+  const [range, setRange] = useState('7');
 
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions-reports'],
     queryFn: async () => {
-      const { data, error } = await supabase.from('transactions').select('*').order('created_at', { ascending: true });
+      const { data, error } = await supabase.from('transactions').select('*, services(service_name)').order('created_at', { ascending: true });
       if (error) throw error;
       return data;
     },
@@ -49,7 +49,7 @@ const Reports = () => {
       buckets[label] = { label, revenue: 0, count: 0, start, end };
     }
 
-    transactions.forEach(tx => {
+    transactions.forEach((tx: any) => {
       if (tx.status === 'cancelled') return;
       const txDate = new Date(tx.created_at);
       Object.values(buckets).forEach(b => {
@@ -64,39 +64,37 @@ const Reports = () => {
   }, [transactions, period, range]);
 
   const totals = useMemo(() => {
-    const completed = transactions.filter(t => t.status !== 'cancelled');
+    const completed = transactions.filter((t: any) => t.status !== 'cancelled');
     return {
-      totalRevenue: completed.reduce((s, t) => s + Number(t.total_price), 0),
-      totalCards: completed.reduce((s, t) => s + t.quantity, 0),
+      totalRevenue: completed.reduce((s: number, t: any) => s + Number(t.total_price), 0),
+      totalServices: completed.reduce((s: number, t: any) => s + t.quantity, 0),
       totalTransactions: completed.length,
-      avgPerTransaction: completed.length > 0 ? completed.reduce((s, t) => s + Number(t.total_price), 0) / completed.length : 0,
+      avgPerTransaction: completed.length > 0 ? completed.reduce((s: number, t: any) => s + Number(t.total_price), 0) / completed.length : 0,
     };
   }, [transactions]);
 
   const exportCSV = () => {
-    const headers = ['Period', 'Revenue (ETB)', 'Cards Printed'];
+    const headers = ['Period', 'Revenue (ETB)', 'Services Count'];
     const rows = summaryData.map(d => [d.label, d.revenue.toFixed(2), d.count]);
     const csv = [headers, ...rows].map(r => r.join(',')).join('\n');
     const blob = new Blob([csv], { type: 'text/csv' });
     const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
+    const a = document.createElement('a'); a.href = url;
     a.download = `esmac-report-${period}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.click(); URL.revokeObjectURL(url);
   };
 
   const exportPDF = () => {
-    // Generate a printable HTML report
-    const html = `
-      <html><head><title>ESMAC Report</title>
-      <style>body{font-family:sans-serif;padding:40px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}.header{text-align:center;margin-bottom:30px}h1{color:#B5541B}</style>
-      </head><body>
-      <div class="header"><h1>ESMAC ID Print</h1><h2>Financial Report — ${period.charAt(0).toUpperCase() + period.slice(1)}</h2><p>Generated: ${format(new Date(), 'MMMM d, yyyy')}</p></div>
-      <p><strong>Total Revenue:</strong> ${formatETB(totals.totalRevenue)} | <strong>Total Cards:</strong> ${totals.totalCards} | <strong>Avg/Transaction:</strong> ${formatETB(totals.avgPerTransaction)}</p>
-      <table><thead><tr><th>Period</th><th>Revenue (ETB)</th><th>Cards Printed</th></tr></thead><tbody>
-      ${summaryData.map(d => `<tr><td>${d.label}</td><td>${formatETB(d.revenue)}</td><td>${d.count}</td></tr>`).join('')}
-      </tbody></table></body></html>`;
+    const html = `<html><head><title>ESMAC Report</title>
+    <style>body{font-family:sans-serif;padding:40px}table{width:100%;border-collapse:collapse;margin-top:20px}th,td{border:1px solid #ddd;padding:8px;text-align:left}th{background:#f5f5f5}.header{text-align:center;margin-bottom:30px}h1{color:#B5541B}.footer{text-align:center;margin-top:40px;font-size:12px;color:#666}</style>
+    </head><body>
+    <div class="header"><h1>ESMAC Service Manager</h1><h2>Financial Report — ${period.charAt(0).toUpperCase() + period.slice(1)}</h2><p>Generated: ${format(new Date(), 'MMMM d, yyyy')}</p></div>
+    <p><strong>Total Revenue:</strong> ${formatETB(totals.totalRevenue)} | <strong>Services:</strong> ${totals.totalServices} | <strong>Avg/Transaction:</strong> ${formatETB(totals.avgPerTransaction)}</p>
+    <table><thead><tr><th>Period</th><th>Revenue (ETB)</th><th>Services</th></tr></thead><tbody>
+    ${summaryData.map(d => `<tr><td>${d.label}</td><td>${formatETB(d.revenue)}</td><td>${d.count}</td></tr>`).join('')}
+    </tbody></table>
+    <div class="footer">Prepared by Abdikeni Hussein Hirsi</div>
+    </body></html>`;
     const win = window.open('', '_blank');
     if (win) { win.document.write(html); win.document.close(); win.print(); }
   };
@@ -114,64 +112,23 @@ const Reports = () => {
         </div>
       </div>
 
-      {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Total Revenue</p>
-            <p className="text-xl font-bold font-heading text-foreground">{formatETB(totals.totalRevenue)}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Cards Printed</p>
-            <p className="text-xl font-bold font-heading text-foreground">{totals.totalCards}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Transactions</p>
-            <p className="text-xl font-bold font-heading text-foreground">{totals.totalTransactions}</p>
-          </CardContent>
-        </Card>
-        <Card className="shadow-card">
-          <CardContent className="p-4">
-            <p className="text-xs text-muted-foreground">Avg / Transaction</p>
-            <p className="text-xl font-bold font-heading text-foreground">{formatETB(totals.avgPerTransaction)}</p>
-          </CardContent>
-        </Card>
+        <Card className="shadow-card"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Total Revenue</p><p className="text-xl font-bold font-heading text-foreground">{formatETB(totals.totalRevenue)}</p></CardContent></Card>
+        <Card className="shadow-card"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Services Provided</p><p className="text-xl font-bold font-heading text-foreground">{totals.totalServices}</p></CardContent></Card>
+        <Card className="shadow-card"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Transactions</p><p className="text-xl font-bold font-heading text-foreground">{totals.totalTransactions}</p></CardContent></Card>
+        <Card className="shadow-card"><CardContent className="p-4"><p className="text-xs text-muted-foreground">Avg / Transaction</p><p className="text-xl font-bold font-heading text-foreground">{formatETB(totals.avgPerTransaction)}</p></CardContent></Card>
       </div>
 
-      {/* Period selector */}
       <div className="flex gap-3">
-        <Select value={period} onValueChange={v => setPeriod(v as Period)}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="daily">Daily</SelectItem>
-            <SelectItem value="weekly">Weekly</SelectItem>
-            <SelectItem value="monthly">Monthly</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={range} onValueChange={setRange}>
-          <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
-          <SelectContent>
-            <SelectItem value="7">Last 7</SelectItem>
-            <SelectItem value="14">Last 14</SelectItem>
-            <SelectItem value="30">Last 30</SelectItem>
-          </SelectContent>
-        </Select>
+        <Select value={period} onValueChange={v => setPeriod(v as Period)}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="daily">Daily</SelectItem><SelectItem value="weekly">Weekly</SelectItem><SelectItem value="monthly">Monthly</SelectItem></SelectContent></Select>
+        <Select value={range} onValueChange={setRange}><SelectTrigger className="w-36"><SelectValue /></SelectTrigger><SelectContent><SelectItem value="7">Last 7</SelectItem><SelectItem value="14">Last 14</SelectItem><SelectItem value="30">Last 30</SelectItem></SelectContent></Select>
       </div>
 
-      {/* Chart */}
       <Card className="shadow-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-heading">Revenue by {period === 'daily' ? 'Day' : period === 'weekly' ? 'Week' : 'Month'}</CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base font-heading">Revenue by {period === 'daily' ? 'Day' : period === 'weekly' ? 'Week' : 'Month'}</CardTitle></CardHeader>
         <CardContent>
           {isLoading ? (
-            <div className="flex items-center justify-center h-60">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-            </div>
+            <div className="flex items-center justify-center h-60"><div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" /></div>
           ) : (
             <ResponsiveContainer width="100%" height={280}>
               <BarChart data={summaryData}>
@@ -186,28 +143,15 @@ const Reports = () => {
         </CardContent>
       </Card>
 
-      {/* Data Table */}
       <Card className="shadow-card">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base font-heading">Summary Table</CardTitle>
-        </CardHeader>
+        <CardHeader className="pb-2"><CardTitle className="text-base font-heading">Summary Table</CardTitle></CardHeader>
         <CardContent className="p-0">
           <div className="overflow-x-auto">
             <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Period</TableHead>
-                  <TableHead className="text-right">Revenue (ETB)</TableHead>
-                  <TableHead className="text-right">Cards Printed</TableHead>
-                </TableRow>
-              </TableHeader>
+              <TableHeader><TableRow><TableHead>Period</TableHead><TableHead className="text-right">Revenue (ETB)</TableHead><TableHead className="text-right">Services</TableHead></TableRow></TableHeader>
               <TableBody>
                 {summaryData.map(d => (
-                  <TableRow key={d.label}>
-                    <TableCell className="font-medium">{d.label}</TableCell>
-                    <TableCell className="text-right">{formatETB(d.revenue)}</TableCell>
-                    <TableCell className="text-right">{d.count}</TableCell>
-                  </TableRow>
+                  <TableRow key={d.label}><TableCell className="font-medium">{d.label}</TableCell><TableCell className="text-right">{formatETB(d.revenue)}</TableCell><TableCell className="text-right">{d.count}</TableCell></TableRow>
                 ))}
               </TableBody>
             </Table>
