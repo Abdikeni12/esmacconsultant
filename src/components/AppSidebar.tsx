@@ -45,7 +45,7 @@ export function AppSidebar() {
           <img src={esmacLogo} alt="ESMAC" className="w-9 h-9 object-contain rounded-md" />
           {!collapsed && (
             <div className="leading-tight">
-              <p className="text-sm font-bold text-sidebar-primary-foreground font-heading">ESMAC ID Print</p>
+              <p className="text-sm font-bold text-sidebar-primary-foreground font-heading">ESMAC Service Manager</p>
               <p className="text-[10px] text-sidebar-foreground/60">by ESMAC Consultant</p>
             </div>
           )}

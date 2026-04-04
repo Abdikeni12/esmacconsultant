@@ -11,7 +11,7 @@ export function TopBar() {
       <div className="flex items-center gap-3">
         <SidebarTrigger />
         <h1 className="text-base font-semibold font-heading text-secondary hidden sm:block">
-          ESMAC ID Print
+          ESMAC Service Manager
         </h1>
       </div>
       <div className="flex items-center gap-3">

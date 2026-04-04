@@ -29,7 +29,7 @@ const Login = () => {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src={esmacLogo} alt="ESMAC Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
-          <h1 className="text-2xl font-bold font-heading text-secondary">ESMAC ID Print</h1>
+          <h1 className="text-2xl font-bold font-heading text-secondary">ESMAC Service Manager</h1>
           <p className="text-sm text-muted-foreground mt-1">by ESMAC Consultant</p>
         </div>
 
