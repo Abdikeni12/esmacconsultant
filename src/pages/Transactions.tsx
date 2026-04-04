@@ -5,23 +5,22 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, CreditCard, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Receipt, Search, Filter } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatETB } from '@/lib/currency';
 
-const CARD_TYPES = ['Standard ID', 'Student ID', 'Employee ID', 'Government ID', 'Membership Card', 'Access Card', 'Other'];
-const STATUSES = ['pending', 'in_progress', 'completed', 'cancelled'] as const;
+const PAYMENT_METHODS = ['Cash', 'Telebirr', 'CBE Birr', 'Ebirr Kaafi', 'Ebirr Coopay'];
+const STATUSES = ['pending', 'completed', 'cancelled'] as const;
 
 const statusColors: Record<string, string> = {
   pending: 'bg-warning/15 text-warning border-warning/30',
-  in_progress: 'bg-info/15 text-info border-info/30',
   completed: 'bg-success/15 text-success border-success/30',
   cancelled: 'bg-destructive/15 text-destructive border-destructive/30',
 };
@@ -29,21 +28,17 @@ const statusColors: Record<string, string> = {
 interface TransactionForm {
   customer_name: string;
   customer_phone: string;
-  card_type: string;
+  service_id: string;
   quantity: number;
   unit_price: number;
+  payment_method: string;
   notes: string;
   status: string;
 }
 
 const emptyForm: TransactionForm = {
-  customer_name: '',
-  customer_phone: '',
-  card_type: 'Standard ID',
-  quantity: 1,
-  unit_price: 0,
-  notes: '',
-  status: 'pending',
+  customer_name: '', customer_phone: '', service_id: '', quantity: 1,
+  unit_price: 0, payment_method: 'Cash', notes: '', status: 'pending',
 };
 
 const Transactions = () => {
@@ -55,12 +50,30 @@ const Transactions = () => {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  const { data: services = [] } = useQuery({
+    queryKey: ['services'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('services').select('*').eq('is_active', true).order('service_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
+  const { data: customers = [] } = useQuery({
+    queryKey: ['customers'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('customers').select('*').order('full_name');
+      if (error) throw error;
+      return data;
+    },
+  });
+
   const { data: transactions = [], isLoading } = useQuery({
     queryKey: ['transactions'],
     queryFn: async () => {
       const { data, error } = await supabase
         .from('transactions')
-        .select('*')
+        .select('*, services(service_name, affects_inventory)')
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data;
@@ -68,21 +81,46 @@ const Transactions = () => {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (form: TransactionForm) => {
+    mutationFn: async (f: TransactionForm) => {
+      const total = f.quantity * f.unit_price;
       const { error } = await supabase.from('transactions').insert({
-        customer_name: form.customer_name.trim(),
-        customer_phone: form.customer_phone.trim() || null,
-        card_type: form.card_type,
-        quantity: form.quantity,
-        unit_price: form.unit_price,
-        notes: form.notes.trim() || null,
-        status: form.status,
+        customer_name: f.customer_name.trim(),
+        customer_phone: f.customer_phone.trim() || null,
+        service_id: f.service_id || null,
+        card_type: null,
+        quantity: f.quantity,
+        unit_price: f.unit_price,
+        total_price: total,
+        payment_method: f.payment_method,
+        notes: f.notes.trim() || null,
+        status: f.status,
         created_by: user!.id,
       });
       if (error) throw error;
+
+      // If service affects inventory, deduct stock
+      const svc = services.find(s => s.id === f.service_id);
+      if (svc?.affects_inventory && f.status !== 'cancelled') {
+        // Find first inventory item and deduct
+        const { data: invItems } = await supabase.from('inventory_items').select('*').limit(1);
+        if (invItems && invItems.length > 0) {
+          const item = invItems[0];
+          await supabase.from('inventory_items').update({
+            quantity: Math.max(0, item.quantity - f.quantity),
+          }).eq('id', item.id);
+          await supabase.from('inventory_adjustments').insert({
+            inventory_item_id: item.id,
+            adjustment_type: 'deduct',
+            quantity_change: -f.quantity,
+            adjusted_by: user!.id,
+            reason: `Transaction: ${f.customer_name} - ${svc.service_name}`,
+          });
+        }
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
+      queryClient.invalidateQueries({ queryKey: ['inventory_items'] });
       toast.success('Transaction created');
       resetForm();
     },
@@ -90,15 +128,18 @@ const Transactions = () => {
   });
 
   const updateMutation = useMutation({
-    mutationFn: async ({ id, form }: { id: string; form: TransactionForm }) => {
+    mutationFn: async ({ id, f }: { id: string; f: TransactionForm }) => {
+      const total = f.quantity * f.unit_price;
       const { error } = await supabase.from('transactions').update({
-        customer_name: form.customer_name.trim(),
-        customer_phone: form.customer_phone.trim() || null,
-        card_type: form.card_type,
-        quantity: form.quantity,
-        unit_price: form.unit_price,
-        notes: form.notes.trim() || null,
-        status: form.status,
+        customer_name: f.customer_name.trim(),
+        customer_phone: f.customer_phone.trim() || null,
+        service_id: f.service_id || null,
+        quantity: f.quantity,
+        unit_price: f.unit_price,
+        total_price: total,
+        payment_method: f.payment_method,
+        notes: f.notes.trim() || null,
+        status: f.status,
       }).eq('id', id);
       if (error) throw error;
     },
@@ -122,19 +163,32 @@ const Transactions = () => {
     onError: (e: Error) => toast.error(e.message),
   });
 
-  const resetForm = () => {
-    setForm(emptyForm);
-    setEditingId(null);
-    setDialogOpen(false);
+  const resetForm = () => { setForm(emptyForm); setEditingId(null); setDialogOpen(false); };
+
+  const handleServiceChange = (serviceId: string) => {
+    const svc = services.find(s => s.id === serviceId);
+    setForm(f => ({
+      ...f,
+      service_id: serviceId,
+      unit_price: svc ? Number(svc.default_price) : f.unit_price,
+    }));
   };
 
-  const handleEdit = (tx: typeof transactions[0]) => {
+  const handleCustomerSelect = (customerId: string) => {
+    const c = customers.find(cu => cu.id === customerId);
+    if (c) {
+      setForm(f => ({ ...f, customer_name: c.full_name, customer_phone: c.phone || '' }));
+    }
+  };
+
+  const handleEdit = (tx: any) => {
     setForm({
       customer_name: tx.customer_name,
       customer_phone: tx.customer_phone || '',
-      card_type: tx.card_type,
+      service_id: tx.service_id || '',
       quantity: tx.quantity,
       unit_price: Number(tx.unit_price),
+      payment_method: tx.payment_method || 'Cash',
       notes: tx.notes || '',
       status: tx.status,
     });
@@ -144,82 +198,84 @@ const Transactions = () => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!form.customer_name.trim()) {
-      toast.error('Customer name is required');
-      return;
-    }
-    if (form.unit_price <= 0) {
-      toast.error('Unit price must be greater than 0');
-      return;
-    }
-    if (editingId) {
-      updateMutation.mutate({ id: editingId, form });
-    } else {
-      createMutation.mutate(form);
-    }
+    if (!form.customer_name.trim()) { toast.error('Customer name is required'); return; }
+    if (!form.service_id) { toast.error('Please select a service'); return; }
+    if (form.unit_price <= 0) { toast.error('Unit price must be greater than 0'); return; }
+    if (editingId) updateMutation.mutate({ id: editingId, f: form });
+    else createMutation.mutate(form);
   };
 
-  const filtered = transactions.filter(tx => {
-    const matchSearch = !search || 
+  const filtered = transactions.filter((tx: any) => {
+    const serviceName = tx.services?.service_name || '';
+    const matchSearch = !search ||
       tx.customer_name.toLowerCase().includes(search.toLowerCase()) ||
-      tx.card_type.toLowerCase().includes(search.toLowerCase()) ||
+      serviceName.toLowerCase().includes(search.toLowerCase()) ||
       (tx.customer_phone && tx.customer_phone.includes(search));
     const matchStatus = statusFilter === 'all' || tx.status === statusFilter;
     return matchSearch && matchStatus;
   });
 
-  const totalRevenue = filtered.reduce((sum, tx) => tx.status !== 'cancelled' ? sum + Number(tx.total_price) : sum, 0);
+  const totalRevenue = filtered.reduce((sum: number, tx: any) => tx.status !== 'cancelled' ? sum + Number(tx.total_price) : sum, 0);
 
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold font-heading text-foreground">Transactions</h1>
-          <p className="text-sm text-muted-foreground">Manage print jobs and transaction records</p>
+          <p className="text-sm text-muted-foreground">Record and manage service transactions</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={(open) => { if (!open) resetForm(); setDialogOpen(open); }}>
           <DialogTrigger asChild>
-            <Button className="gradient-primary">
-              <Plus className="h-4 w-4 mr-2" /> New Transaction
-            </Button>
+            <Button className="gradient-primary"><Plus className="h-4 w-4 mr-2" /> New Transaction</Button>
           </DialogTrigger>
           <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle className="font-heading">
-                {editingId ? 'Edit Transaction' : 'New Transaction'}
-              </DialogTitle>
+              <DialogTitle className="font-heading">{editingId ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Customer */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Customer Name *</Label>
-                  <Input value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="Full name" required />
+                  <Label>Customer *</Label>
+                  {customers.length > 0 && !editingId && (
+                    <Select onValueChange={handleCustomerSelect}>
+                      <SelectTrigger className="mb-1"><SelectValue placeholder="Select existing..." /></SelectTrigger>
+                      <SelectContent>
+                        {customers.map(c => <SelectItem key={c.id} value={c.id}>{c.full_name}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                  )}
+                  <Input value={form.customer_name} onChange={e => setForm(f => ({ ...f, customer_name: e.target.value }))} placeholder="Customer name" required />
                 </div>
                 <div className="space-y-2">
                   <Label>Phone</Label>
                   <Input value={form.customer_phone} onChange={e => setForm(f => ({ ...f, customer_phone: e.target.value }))} placeholder="Phone number" />
                 </div>
               </div>
+
+              {/* Service & Payment */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Card Type *</Label>
-                  <Select value={form.card_type} onValueChange={v => setForm(f => ({ ...f, card_type: v }))}>
-                    <SelectTrigger><SelectValue /></SelectTrigger>
+                  <Label>Service *</Label>
+                  <Select value={form.service_id} onValueChange={handleServiceChange}>
+                    <SelectTrigger><SelectValue placeholder="Select service" /></SelectTrigger>
                     <SelectContent>
-                      {CARD_TYPES.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                      {services.map(s => <SelectItem key={s.id} value={s.id}>{s.service_name}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Status</Label>
-                  <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                  <Label>Payment Method</Label>
+                  <Select value={form.payment_method} onValueChange={v => setForm(f => ({ ...f, payment_method: v }))}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>)}
+                      {PAYMENT_METHODS.map(m => <SelectItem key={m} value={m}>{m}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
               </div>
+
+              {/* Qty & Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity *</Label>
@@ -230,18 +286,29 @@ const Transactions = () => {
                   <Input type="number" min={0} step={0.01} value={form.unit_price} onChange={e => setForm(f => ({ ...f, unit_price: parseFloat(e.target.value) || 0 }))} />
                 </div>
               </div>
+
               <div className="p-3 rounded-md bg-muted text-sm">
                 <span className="text-muted-foreground">Total: </span>
                 <span className="font-semibold text-foreground">{formatETB(form.quantity * form.unit_price)}</span>
               </div>
+
+              <div className="space-y-2">
+                <Label>Status</Label>
+                <Select value={form.status} onValueChange={v => setForm(f => ({ ...f, status: v }))}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s === 'completed' ? 'Paid' : s === 'pending' ? 'Pending' : 'Cancelled'}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+
               <div className="space-y-2">
                 <Label>Notes</Label>
-                <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." rows={3} />
+                <Textarea value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional notes..." rows={2} />
               </div>
+
               <DialogFooter className="gap-2">
-                <DialogClose asChild>
-                  <Button type="button" variant="outline">Cancel</Button>
-                </DialogClose>
+                <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
                 <Button type="submit" className="gradient-primary" disabled={createMutation.isPending || updateMutation.isPending}>
                   {editingId ? 'Update' : 'Create'}
                 </Button>
@@ -255,7 +322,7 @@ const Transactions = () => {
       <div className="flex flex-col sm:flex-row gap-3">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customer, card type..." className="pl-9" />
+          <Input value={search} onChange={e => setSearch(e.target.value)} placeholder="Search customer, service..." className="pl-9" />
         </div>
         <Select value={statusFilter} onValueChange={setStatusFilter}>
           <SelectTrigger className="w-full sm:w-40">
@@ -264,7 +331,7 @@ const Transactions = () => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Status</SelectItem>
-            {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s.replace('_', ' ')}</SelectItem>)}
+            {STATUSES.map(s => <SelectItem key={s} value={s} className="capitalize">{s === 'completed' ? 'Paid' : s === 'pending' ? 'Pending' : 'Cancelled'}</SelectItem>)}
           </SelectContent>
         </Select>
         <div className="flex items-center gap-2 ml-auto text-sm text-muted-foreground">
@@ -283,7 +350,7 @@ const Transactions = () => {
             </div>
           ) : filtered.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-40 text-muted-foreground">
-              <CreditCard className="h-8 w-8 mb-2" />
+              <Receipt className="h-8 w-8 mb-2" />
               <p className="text-sm">No transactions found</p>
             </div>
           ) : (
@@ -292,17 +359,18 @@ const Transactions = () => {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Customer</TableHead>
-                    <TableHead className="hidden sm:table-cell">Card Type</TableHead>
+                    <TableHead className="hidden sm:table-cell">Service</TableHead>
                     <TableHead className="text-right">Qty</TableHead>
                     <TableHead className="text-right hidden sm:table-cell">Unit Price</TableHead>
                     <TableHead className="text-right">Total</TableHead>
+                    <TableHead className="hidden md:table-cell">Payment</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden md:table-cell">Date</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map(tx => (
+                  {filtered.map((tx: any) => (
                     <TableRow key={tx.id}>
                       <TableCell>
                         <div>
@@ -310,13 +378,16 @@ const Transactions = () => {
                           {tx.customer_phone && <p className="text-xs text-muted-foreground">{tx.customer_phone}</p>}
                         </div>
                       </TableCell>
-                      <TableCell className="hidden sm:table-cell text-muted-foreground">{tx.card_type}</TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground">
+                        {tx.services?.service_name || '—'}
+                      </TableCell>
                       <TableCell className="text-right">{tx.quantity}</TableCell>
                       <TableCell className="text-right hidden sm:table-cell">{formatETB(Number(tx.unit_price))}</TableCell>
                       <TableCell className="text-right font-medium">{formatETB(Number(tx.total_price))}</TableCell>
+                      <TableCell className="hidden md:table-cell text-muted-foreground text-xs">{tx.payment_method}</TableCell>
                       <TableCell>
                         <Badge variant="outline" className={`capitalize text-xs ${statusColors[tx.status] || ''}`}>
-                          {tx.status.replace('_', ' ')}
+                          {tx.status === 'completed' ? 'Paid' : tx.status === 'pending' ? 'Pending' : 'Cancelled'}
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden md:table-cell text-muted-foreground text-xs">
