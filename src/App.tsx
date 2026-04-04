@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Transactions from "./pages/Transactions";
 import Inventory from "./pages/Inventory";
 import Customers from "./pages/Customers";
+import Services from "./pages/Services";
 import Reports from "./pages/Reports";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
@@ -48,6 +49,7 @@ function ProtectedRoutes() {
         <Route path="/transactions" element={<Transactions />} />
         <Route path="/inventory" element={<Inventory />} />
         <Route path="/customers" element={<Customers />} />
+        <Route path="/services" element={<Services />} />
         <Route path="/reports" element={<Reports />} />
         <Route path="/users" element={<UserManagement />} />
         <Route path="/audit-logs" element={<AuditLogs />} />

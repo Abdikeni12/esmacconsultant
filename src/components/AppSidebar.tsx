@@ -1,4 +1,4 @@
-import { LayoutDashboard, Users, Package, FileText, CreditCard, Settings, Shield } from 'lucide-react';
+import { LayoutDashboard, Users, Package, FileText, CreditCard, Settings, Shield, Wrench } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import { useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
@@ -18,6 +18,7 @@ import {
 const mainItems = [
   { title: 'Dashboard', url: '/', icon: LayoutDashboard },
   { title: 'Transactions', url: '/transactions', icon: CreditCard },
+  { title: 'Services', url: '/services', icon: Wrench },
   { title: 'Inventory', url: '/inventory', icon: Package },
   { title: 'Customers', url: '/customers', icon: Users },
   { title: 'Reports', url: '/reports', icon: FileText },
@@ -44,7 +45,7 @@ export function AppSidebar() {
           <img src={esmacLogo} alt="ESMAC" className="w-9 h-9 object-contain rounded-md" />
           {!collapsed && (
             <div className="leading-tight">
-              <p className="text-sm font-bold text-sidebar-primary-foreground font-heading">ESMAC ID Print</p>
+              <p className="text-sm font-bold text-sidebar-primary-foreground font-heading">ESMAC Service Manager</p>
               <p className="text-[10px] text-sidebar-foreground/60">by ESMAC Consultant</p>
             </div>
           )}
