@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Transactions from "./pages/Transactions";
 import Inventory from "./pages/Inventory";
 import Customers from "./pages/Customers";
+import Services from "./pages/Services";
 import Reports from "./pages/Reports";
 import UserManagement from "./pages/UserManagement";
 import AuditLogs from "./pages/AuditLogs";
