@@ -1,6 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { logAudit } from '@/lib/auditLog';
 import type { User, Session } from '@supabase/supabase-js';
 
 interface UserProfile {
@@ -77,8 +76,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const email = `${username.toLowerCase().trim()}@esmac.local`;
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) return { error: 'Invalid username or password' };
-    // Fire-and-forget audit log
-    logAudit('login', 'auth', null, `User ${username} logged in`);
     return {};
   };
 

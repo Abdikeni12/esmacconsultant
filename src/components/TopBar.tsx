@@ -2,7 +2,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Button } from '@/components/ui/button';
 import { LogOut, User } from 'lucide-react';
-import { NotificationBell } from '@/components/NotificationBell';
 
 export function TopBar() {
   const { profile, signOut } = useAuth();
@@ -15,8 +14,7 @@ export function TopBar() {
           ESMAC Service Manager
         </h1>
       </div>
-      <div className="flex items-center gap-2">
-        <NotificationBell />
+      <div className="flex items-center gap-3">
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
           <User className="h-4 w-4" />
           <span className="hidden sm:inline">{profile?.full_name || profile?.username}</span>

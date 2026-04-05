@@ -28,11 +28,9 @@ const Login = () => {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
-          <img src={esmacLogo} alt="ESMAC Consultant Logo" className="w-28 h-28 mx-auto mb-4 object-contain" />
+          <img src={esmacLogo} alt="ESMAC Logo" className="w-24 h-24 mx-auto mb-4 object-contain" />
           <h1 className="text-2xl font-bold font-heading text-secondary">ESMAC Service Manager</h1>
-          <p className="text-sm text-muted-foreground mt-1 italic">
-            "Your Partner in Engineering Services and Management Affairs"
-          </p>
+          <p className="text-sm text-muted-foreground mt-1">by ESMAC Consultant</p>
         </div>
 
         <Card className="shadow-card">
@@ -86,9 +84,6 @@ const Login = () => {
         </Card>
 
         <p className="text-center text-xs text-muted-foreground mt-6">
-          Prepared by Abdikeni Hussein Hirsi
-        </p>
-        <p className="text-center text-xs text-muted-foreground mt-1">
           © {new Date().getFullYear()} ESMAC Consultant. All rights reserved.
         </p>
       </div>

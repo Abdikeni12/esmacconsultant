@@ -154,42 +154,6 @@ export type Database = {
         }
         Relationships: []
       }
-      notifications: {
-        Row: {
-          created_at: string
-          entity: string | null
-          entity_id: string | null
-          id: string
-          is_read: boolean
-          message: string
-          title: string
-          type: string
-          user_id: string | null
-        }
-        Insert: {
-          created_at?: string
-          entity?: string | null
-          entity_id?: string | null
-          id?: string
-          is_read?: boolean
-          message: string
-          title: string
-          type?: string
-          user_id?: string | null
-        }
-        Update: {
-          created_at?: string
-          entity?: string | null
-          entity_id?: string | null
-          id?: string
-          is_read?: boolean
-          message?: string
-          title?: string
-          type?: string
-          user_id?: string | null
-        }
-        Relationships: []
-      }
       profiles: {
         Row: {
           created_at: string
@@ -331,15 +295,6 @@ export type Database = {
     }
     Functions: {
       is_admin: { Args: { _user_id: string }; Returns: boolean }
-      log_audit: {
-        Args: {
-          _action: string
-          _details?: string
-          _entity: string
-          _entity_id?: string
-        }
-        Returns: undefined
-      }
     }
     Enums: {
       [_ in never]: never
