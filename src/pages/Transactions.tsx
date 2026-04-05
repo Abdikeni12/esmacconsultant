@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -12,9 +12,11 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Receipt, Search, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Receipt, Search, Filter, Printer, Download } from 'lucide-react';
 import { format } from 'date-fns';
 import { formatETB } from '@/lib/currency';
+import { logAudit } from '@/lib/auditLog';
+import { TransactionReceipt } from '@/components/TransactionReceipt';
 
 const PAYMENT_METHODS = ['Cash', 'Telebirr', 'CBE Birr', 'Ebirr Kaafi', 'Ebirr Coopay'];
 const STATUSES = ['pending', 'completed', 'cancelled'] as const;
@@ -49,6 +51,8 @@ const Transactions = () => {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [receiptTx, setReceiptTx] = useState<any>(null);
+  const receiptRef = useRef<HTMLDivElement>(null);
 
   const { data: services = [] } = useQuery({
     queryKey: ['services'],
@@ -83,7 +87,7 @@ const Transactions = () => {
   const createMutation = useMutation({
     mutationFn: async (f: TransactionForm) => {
       const total = f.quantity * f.unit_price;
-      const { error } = await supabase.from('transactions').insert({
+      const { data, error } = await supabase.from('transactions').insert({
         customer_name: f.customer_name.trim(),
         customer_phone: f.customer_phone.trim() || null,
         service_id: f.service_id || null,
@@ -95,19 +99,29 @@ const Transactions = () => {
         notes: f.notes.trim() || null,
         status: f.status,
         created_by: user!.id,
-      });
+      }).select('id').single();
       if (error) throw error;
+
+      // Audit log (fire-and-forget)
+      logAudit('create', 'transaction', data.id, `${f.customer_name} - ${formatETB(total)}`);
+
+      // Notification for new transaction
+      supabase.from('notifications').insert({
+        title: 'New Transaction',
+        message: `${f.customer_name} — ${formatETB(total)}`,
+        type: 'info',
+        entity: 'transaction',
+        entity_id: data.id,
+      }).then(() => {});
 
       // If service affects inventory, deduct stock
       const svc = services.find(s => s.id === f.service_id);
       if (svc?.affects_inventory && f.status !== 'cancelled') {
-        // Find first inventory item and deduct
         const { data: invItems } = await supabase.from('inventory_items').select('*').limit(1);
         if (invItems && invItems.length > 0) {
           const item = invItems[0];
-          await supabase.from('inventory_items').update({
-            quantity: Math.max(0, item.quantity - f.quantity),
-          }).eq('id', item.id);
+          const newQty = Math.max(0, item.quantity - f.quantity);
+          await supabase.from('inventory_items').update({ quantity: newQty }).eq('id', item.id);
           await supabase.from('inventory_adjustments').insert({
             inventory_item_id: item.id,
             adjustment_type: 'deduct',
@@ -115,12 +129,25 @@ const Transactions = () => {
             adjusted_by: user!.id,
             reason: `Transaction: ${f.customer_name} - ${svc.service_name}`,
           });
+          logAudit('update', 'inventory', item.id, `Deducted ${f.quantity} for transaction`);
+
+          // Low stock notification
+          if (newQty <= item.min_stock_level) {
+            supabase.from('notifications').insert({
+              title: 'Low Stock Alert',
+              message: `${item.name} is low: ${newQty} ${item.unit} remaining`,
+              type: 'warning',
+              entity: 'inventory',
+              entity_id: item.id,
+            }).then(() => {});
+          }
         }
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
       queryClient.invalidateQueries({ queryKey: ['inventory_items'] });
+      queryClient.invalidateQueries({ queryKey: ['notifications'] });
       toast.success('Transaction created');
       resetForm();
     },
@@ -142,6 +169,7 @@ const Transactions = () => {
         status: f.status,
       }).eq('id', id);
       if (error) throw error;
+      logAudit('update', 'transaction', id, `Updated: ${f.customer_name}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -155,6 +183,7 @@ const Transactions = () => {
     mutationFn: async (id: string) => {
       const { error } = await supabase.from('transactions').delete().eq('id', id);
       if (error) throw error;
+      logAudit('delete', 'transaction', id, 'Transaction deleted');
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['transactions'] });
@@ -205,6 +234,24 @@ const Transactions = () => {
     else createMutation.mutate(form);
   };
 
+  const handlePrintReceipt = (tx: any) => {
+    setReceiptTx(tx);
+    setTimeout(() => {
+      const content = receiptRef.current;
+      if (!content) return;
+      const win = window.open('', '_blank', 'width=800,height=600');
+      if (!win) { toast.error('Popup blocked'); return; }
+      win.document.write(`
+        <html><head><title>Receipt</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <style>body{margin:0;padding:20px;font-family:Inter,sans-serif}@media print{body{padding:0}}</style>
+        </head><body>${content.innerHTML}</body></html>
+      `);
+      win.document.close();
+      setTimeout(() => win.print(), 300);
+    }, 100);
+  };
+
   const filtered = transactions.filter((tx: any) => {
     const serviceName = tx.services?.service_name || '';
     const matchSearch = !search ||
@@ -233,7 +280,6 @@ const Transactions = () => {
               <DialogTitle className="font-heading">{editingId ? 'Edit Transaction' : 'New Transaction'}</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
-              {/* Customer */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Customer *</Label>
@@ -253,7 +299,6 @@ const Transactions = () => {
                 </div>
               </div>
 
-              {/* Service & Payment */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Service *</Label>
@@ -275,7 +320,6 @@ const Transactions = () => {
                 </div>
               </div>
 
-              {/* Qty & Price */}
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Quantity *</Label>
@@ -395,6 +439,9 @@ const Transactions = () => {
                       </TableCell>
                       <TableCell className="text-right">
                         <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handlePrintReceipt(tx)} title="Receipt">
+                            <Printer className="h-3.5 w-3.5" />
+                          </Button>
                           <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => handleEdit(tx)}>
                             <Pencil className="h-3.5 w-3.5" />
                           </Button>
@@ -415,6 +462,13 @@ const Transactions = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Hidden receipt for printing */}
+      {receiptTx && (
+        <div className="hidden">
+          <TransactionReceipt ref={receiptRef} transaction={receiptTx} />
+        </div>
+      )}
     </div>
   );
 };
