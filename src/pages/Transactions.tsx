@@ -127,14 +127,12 @@ const Transactions = () => {
 
   const updateMutation = useMutation({
     mutationFn: async ({ id, f }: { id: string; f: TransactionForm }) => {
-      const total = f.quantity * f.unit_price;
       const { error } = await supabase.from('transactions').update({
         customer_name: f.customer_name.trim(),
         customer_phone: f.customer_phone.trim() || null,
         service_id: f.service_id || null,
         quantity: f.quantity,
         unit_price: f.unit_price,
-        total_price: total,
         payment_method: f.payment_method,
         notes: f.notes.trim() || null,
         status: f.status,
