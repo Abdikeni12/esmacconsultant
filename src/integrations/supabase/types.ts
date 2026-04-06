@@ -348,6 +348,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_password_changed: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
