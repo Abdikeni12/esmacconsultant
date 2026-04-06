@@ -82,7 +82,6 @@ const Transactions = () => {
 
   const createMutation = useMutation({
     mutationFn: async (f: TransactionForm) => {
-      const total = f.quantity * f.unit_price;
       const { error } = await supabase.from('transactions').insert({
         customer_name: f.customer_name.trim(),
         customer_phone: f.customer_phone.trim() || null,
@@ -90,7 +89,6 @@ const Transactions = () => {
         card_type: null,
         quantity: f.quantity,
         unit_price: f.unit_price,
-        total_price: total,
         payment_method: f.payment_method,
         notes: f.notes.trim() || null,
         status: f.status,
