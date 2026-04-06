@@ -90,9 +90,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
     const { error } = await supabase.auth.updateUser({ password: newPassword });
     if (error) return { error: error.message };
-    // Update must_change_password flag
+    // Use secure RPC to mark password changed
     if (user) {
-      await supabase.from('profiles').update({ must_change_password: false }).eq('id', user.id);
+      await supabase.rpc('mark_password_changed');
       setProfile(prev => prev ? { ...prev, must_change_password: false } : null);
     }
     return {};
