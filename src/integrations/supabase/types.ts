@@ -330,6 +330,14 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_profile_sensitive_fields: {
+        Args: { _user_id: string }
+        Returns: {
+          is_active: boolean
+          must_change_password: boolean
+          role: string
+        }[]
+      }
       is_admin: { Args: { _user_id: string }; Returns: boolean }
       log_audit: {
         Args: {
@@ -340,6 +348,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      mark_password_changed: { Args: never; Returns: undefined }
     }
     Enums: {
       [_ in never]: never
